@@ -1,4 +1,4 @@
-// V1_MYREADER_GITHUB_RPC_SHIM_20261114
+// V2_MYREADER_GITHUB_RPC_SHIM_NESTED_IFRAME_FIX_20261114
 (() => {
   'use strict';
 
@@ -11,6 +11,7 @@
 
   let bridgeReady = false;
   let bridgeFrame = null;
+  let bridgeRpcWindow = null;
   let seq = 0;
   const pending = new Map();
   const queued = [];
@@ -144,21 +145,17 @@
   }
 
   function postRpc(message) {
-    if (!bridgeFrame || !bridgeFrame.contentWindow) {
+    if (!bridgeReady || !bridgeRpcWindow || !bridgeOrigin) {
       queued.push(message);
       return;
     }
-    if (!bridgeReady) {
-      queued.push(message);
-      return;
-    }
-    bridgeFrame.contentWindow.postMessage(message, bridgeOrigin);
+    bridgeRpcWindow.postMessage(message, bridgeOrigin);
   }
 
   function flushQueue() {
-    if (!bridgeReady || !bridgeFrame || !bridgeFrame.contentWindow) return;
+    if (!bridgeReady || !bridgeRpcWindow || !bridgeOrigin) return;
     while (queued.length) {
-      bridgeFrame.contentWindow.postMessage(queued.shift(), bridgeOrigin);
+      bridgeRpcWindow.postMessage(queued.shift(), bridgeOrigin);
     }
   }
 
@@ -237,17 +234,22 @@
   }
 
   window.addEventListener('message', event => {
-    if (!bridgeFrame || event.source !== bridgeFrame.contentWindow) return;
+    // Apps Script HTML Service may add a Google wrapper iframe.
+    // The actual bridge message can therefore come from a nested child window,
+    // not bridgeFrame.contentWindow. Trust only Google-hosted origins and then
+    // pin the exact source window after the READY handshake.
     if (!isTrustedBridgeOrigin(event.origin)) return;
     const data = event.data || {};
 
     if (data.type === 'MYREADER_BRIDGE_READY_V1') {
       bridgeOrigin = event.origin;
-      bridgeReady = true;
+      bridgeRpcWindow = event.source;
+      bridgeReady = !!bridgeRpcWindow;
       flushQueue();
       return;
     }
 
+    if (!bridgeReady || !bridgeRpcWindow || event.source !== bridgeRpcWindow) return;
     if (data.type !== 'MYREADER_RPC_RESULT_V1' || !data.id) return;
 
     const item = pending.get(String(data.id));
