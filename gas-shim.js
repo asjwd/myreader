@@ -1,4 +1,4 @@
-// V3_MYREADER_PERSISTENT_BRIDGE_BROKER_20261114
+// V4A_MYREADER_BROWSER_CACHE_PREFETCH_20261114
 (() => {
   'use strict';
 
@@ -13,6 +13,10 @@
   const CHILD_RPC_TYPE = 'MYREADER_CHILD_RPC_V3';
   const CHILD_RESULT_TYPE = 'MYREADER_CHILD_RPC_RESULT_V3';
   const CHILD_NAV_TYPE = 'MYREADER_CHILD_NAV_V3';
+  const BOOT_CACHE_DB_V4A = 'jaw-myreader-v4a';
+  const BOOT_CACHE_STORE_V4A = 'bootstrap';
+  const BOOT_CACHE_TTL_MS_V4A = 10 * 60 * 1000;
+  const ACCESS_SENTINEL_V4A = '__MYREADER_ACCESS__';
 
   let bridgeReady = false;
   let bridgeFrame = null;
@@ -21,6 +25,9 @@
   const pending = new Map();
   const queued = [];
   const childRoutes = new Map();
+  const bootstrapCacheAttemptedV4A = new Set();
+  const bootstrapPrefetchInFlightV4A = new Set();
+  let bootstrapDbPromiseV4A = null;
 
   function currentFingerprint() {
     const ua = String(navigator.userAgent || '');
@@ -86,6 +93,8 @@
       localStorage.removeItem(LEGACY_TOKEN_KEY);
       localStorage.removeItem(LEGACY_TOKEN_KEY_2);
     } catch (err) {}
+    bootstrapCacheAttemptedV4A.clear();
+    bootstrapCacheDeleteV4A('').catch(() => {});
   }
 
   function absorbDeviceFromUrl() {
@@ -150,6 +159,122 @@
     return value;
   }
 
+  function tokenPartitionV4A() {
+    const raw = getToken();
+    let h = 2166136261;
+    for (let i = 0; i < raw.length; i++) {
+      h ^= raw.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function normalizeBootstrapSurfaceV4A(method, args) {
+    const name = String(method || '');
+    const a = Array.isArray(args) ? args : [];
+    if (name === 'getLiteratureLibraryBootstrapFastV70' || name === 'getLiteratureLibraryBootstrap') {
+      return 'article';
+    }
+    if (name === 'getResearchSurfaceBootstrapV127') {
+      const raw = String(a[0] || '').toLowerCase();
+      if (raw === 'book' || raw === 'books') return 'book';
+      if (raw === 'project' || raw === 'projects' || raw === 'manuscript' || raw === 'manuscripts') return 'project';
+    }
+    return '';
+  }
+
+  function bootstrapCacheKeyV4A(surface) {
+    return tokenPartitionV4A() + '::' + String(surface || '').toLowerCase();
+  }
+
+  function openBootstrapDbV4A() {
+    if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB unavailable'));
+    if (bootstrapDbPromiseV4A) return bootstrapDbPromiseV4A;
+    bootstrapDbPromiseV4A = new Promise((resolve, reject) => {
+      const req = indexedDB.open(BOOT_CACHE_DB_V4A, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(BOOT_CACHE_STORE_V4A)) {
+          db.createObjectStore(BOOT_CACHE_STORE_V4A, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
+    });
+    return bootstrapDbPromiseV4A;
+  }
+
+  async function bootstrapCacheGetV4A(surface) {
+    if (!surface || !getToken()) return null;
+    try {
+      const db = await openBootstrapDbV4A();
+      const key = bootstrapCacheKeyV4A(surface);
+      const row = await new Promise((resolve, reject) => {
+        const tx = db.transaction(BOOT_CACHE_STORE_V4A, 'readonly');
+        const req = tx.objectStore(BOOT_CACHE_STORE_V4A).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error || new Error('IndexedDB read failed'));
+      });
+      if (!row || !row.data || !row.savedAt) return null;
+      if ((Date.now() - Number(row.savedAt || 0)) > BOOT_CACHE_TTL_MS_V4A) {
+        bootstrapCacheDeleteV4A(surface).catch(() => {});
+        return null;
+      }
+      return row.data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async function bootstrapCachePutV4A(surface, value) {
+    if (!surface || !value || value.ok === false || !getToken()) return false;
+    try {
+      const db = await openBootstrapDbV4A();
+      const row = {
+        key: bootstrapCacheKeyV4A(surface),
+        surface: String(surface),
+        savedAt: Date.now(),
+        data: value
+      };
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(BOOT_CACHE_STORE_V4A, 'readwrite');
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+        tx.objectStore(BOOT_CACHE_STORE_V4A).put(row);
+      });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async function bootstrapCacheDeleteV4A(surface) {
+    try {
+      const db = await openBootstrapDbV4A();
+      const tx = db.transaction(BOOT_CACHE_STORE_V4A, 'readwrite');
+      const store = tx.objectStore(BOOT_CACHE_STORE_V4A);
+      if (surface) {
+        store.delete(bootstrapCacheKeyV4A(surface));
+      } else {
+        store.clear();
+      }
+      return await new Promise(resolve => {
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
+      });
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function isBootstrapMutationV4A(method) {
+    const name = String(method || '');
+    if (!name) return false;
+    if (/^(get|verify|download|send|warm|diagnose|record)/i.test(name)) return false;
+    return /^(add|create|delete|remove|save|set|sync|update|upload|process)/i.test(name);
+  }
+
   function postToBridge(message) {
     if (!bridgeReady || !bridgeRpcWindow || !bridgeOrigin) {
       queued.push(message);
@@ -173,8 +298,18 @@
     window.parent.postMessage({ type: CHILD_RPC_TYPE, payload: message }, GITHUB_ORIGIN);
   }
 
-  function invoke(method, args, success, failure, userObject) {
-    const id = `v1-${Date.now()}-${++seq}`;
+  function invokeNetworkV4A(method, args, success, failure, userObject) {
+    const rawArgs = Array.isArray(args) ? args : [];
+    const surface = normalizeBootstrapSurfaceV4A(method, rawArgs);
+    const mutation = isBootstrapMutationV4A(method);
+
+    const wrappedSuccess = (value, obj) => {
+      if (surface) bootstrapCachePutV4A(surface, value).catch(() => {});
+      if (mutation) bootstrapCacheDeleteV4A('').catch(() => {});
+      if (typeof success === 'function') success(value, obj);
+    };
+
+    const id = `v4a-${Date.now()}-${++seq}`;
     const timer = setTimeout(() => {
       const item = pending.get(id);
       if (!item) return;
@@ -184,16 +319,98 @@
       else console.error(err);
     }, RPC_TIMEOUT_MS);
 
-    pending.set(id, { success, failure, userObject, timer, method });
+    pending.set(id, {
+      success: wrappedSuccess,
+      failure,
+      userObject,
+      timer,
+      method,
+      args: rawArgs,
+      surface
+    });
 
     routeRpcMessage({
       type: 'MYREADER_RPC_V1',
       id,
       method: String(method || ''),
-      args: (Array.isArray(args) ? args : []).map(makeSerializable),
+      args: rawArgs.map(makeSerializable),
       deviceToken: getToken(),
       fingerprint: currentFingerprint()
     });
+  }
+
+  function invoke(method, args, success, failure, userObject) {
+    const rawArgs = Array.isArray(args) ? args : [];
+    const surface = normalizeBootstrapSurfaceV4A(method, rawArgs);
+
+    if (surface && !bootstrapCacheAttemptedV4A.has(surface)) {
+      bootstrapCacheAttemptedV4A.add(surface);
+      bootstrapCacheGetV4A(surface).then(cached => {
+        if (cached) {
+          setTimeout(() => {
+            try {
+              if (typeof success === 'function') success(cached, userObject);
+            } catch (err) {
+              console.error(err);
+            }
+          }, 0);
+
+          // Stale-while-revalidate: refresh the snapshot quietly.
+          invokeNetworkV4A(method, rawArgs, null, null, undefined);
+          return;
+        }
+        invokeNetworkV4A(method, rawArgs, success, failure, userObject);
+      }).catch(() => {
+        invokeNetworkV4A(method, rawArgs, success, failure, userObject);
+      });
+      return;
+    }
+
+    invokeNetworkV4A(method, rawArgs, success, failure, userObject);
+  }
+
+  function prefetchBootstrapV4A(surface) {
+    const name = String(surface || '').toLowerCase();
+    if (!getToken() || bootstrapPrefetchInFlightV4A.has(name)) return;
+    bootstrapPrefetchInFlightV4A.add(name);
+
+    let method = '';
+    let args = [];
+    if (name === 'article') {
+      method = 'getLiteratureLibraryBootstrapFastV70';
+      args = [ACCESS_SENTINEL_V4A];
+    } else if (name === 'book') {
+      method = 'getResearchSurfaceBootstrapV127';
+      args = ['book', ACCESS_SENTINEL_V4A];
+    } else if (name === 'project') {
+      method = 'getResearchSurfaceBootstrapV127';
+      args = ['project', ACCESS_SENTINEL_V4A];
+    } else {
+      bootstrapPrefetchInFlightV4A.delete(name);
+      return;
+    }
+
+    invokeNetworkV4A(
+      method,
+      args,
+      () => bootstrapPrefetchInFlightV4A.delete(name),
+      () => bootstrapPrefetchInFlightV4A.delete(name),
+      undefined
+    );
+  }
+
+  function prefetchAllV4A() {
+    if (!IS_TOP || !getToken()) return;
+    const schedule = (fn, delay) => {
+      if ('requestIdleCallback' in window) {
+        setTimeout(() => requestIdleCallback(fn, { timeout: 1500 }), delay);
+      } else {
+        setTimeout(fn, delay);
+      }
+    };
+    schedule(() => prefetchBootstrapV4A('article'), 0);
+    schedule(() => prefetchBootstrapV4A('book'), 180);
+    schedule(() => prefetchBootstrapV4A('project'), 360);
   }
 
   function createRunner() {
@@ -401,6 +618,10 @@
   window.myReaderQueryParamV1 = queryParam;
   window.myReaderNavigateV3 = navigateV3;
   window.myReaderIsEmbeddedV3 = !IS_TOP;
+  window.myReaderBootstrapCacheGetV4A = bootstrapCacheGetV4A;
+  window.myReaderBootstrapCachePutV4A = bootstrapCachePutV4A;
+  window.myReaderBootstrapCacheClearV4A = bootstrapCacheDeleteV4A;
+  window.myReaderPrefetchAllV4A = prefetchAllV4A;
 
   if (IS_TOP && document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountBridge, { once: true });
