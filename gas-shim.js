@@ -1,4 +1,4 @@
-// V2_MYREADER_GITHUB_RPC_SHIM_NESTED_IFRAME_FIX_20261114
+// V3_MYREADER_PERSISTENT_BRIDGE_BROKER_20261114
 (() => {
   'use strict';
 
@@ -8,6 +8,11 @@
   const LEGACY_TOKEN_KEY = 'JAW_RESEARCH_LIBRARY_DEVICE_V108';
   const LEGACY_TOKEN_KEY_2 = 'JAW_ANNOTATED_DEVICE_TOKEN_V75';
   const RPC_TIMEOUT_MS = 120000;
+  const GITHUB_ORIGIN = location.origin;
+  const IS_TOP = window === window.top;
+  const CHILD_RPC_TYPE = 'MYREADER_CHILD_RPC_V3';
+  const CHILD_RESULT_TYPE = 'MYREADER_CHILD_RPC_RESULT_V3';
+  const CHILD_NAV_TYPE = 'MYREADER_CHILD_NAV_V3';
 
   let bridgeReady = false;
   let bridgeFrame = null;
@@ -15,6 +20,7 @@
   let seq = 0;
   const pending = new Map();
   const queued = [];
+  const childRoutes = new Map();
 
   function currentFingerprint() {
     const ua = String(navigator.userAgent || '');
@@ -144,7 +150,7 @@
     return value;
   }
 
-  function postRpc(message) {
+  function postToBridge(message) {
     if (!bridgeReady || !bridgeRpcWindow || !bridgeOrigin) {
       queued.push(message);
       return;
@@ -157,6 +163,14 @@
     while (queued.length) {
       bridgeRpcWindow.postMessage(queued.shift(), bridgeOrigin);
     }
+  }
+
+  function routeRpcMessage(message) {
+    if (IS_TOP) {
+      postToBridge(message);
+      return;
+    }
+    window.parent.postMessage({ type: CHILD_RPC_TYPE, payload: message }, GITHUB_ORIGIN);
   }
 
   function invoke(method, args, success, failure, userObject) {
@@ -172,7 +186,7 @@
 
     pending.set(id, { success, failure, userObject, timer, method });
 
-    postRpc({
+    routeRpcMessage({
       type: 'MYREADER_RPC_V1',
       id,
       method: String(method || ''),
@@ -233,13 +247,84 @@
     }
   }
 
+  function moduleUrlInfo(raw) {
+    try {
+      const u = new URL(String(raw || ''), location.href);
+      if (u.origin !== location.origin) return null;
+      const p = u.pathname.replace(/\/+$/, '');
+      if (p === '/myreader' || p === '/myreader/index.html') return { kind: 'home', url: u.toString() };
+      if (/^\/myreader\/(articles|books|manuscripts)\.html$/i.test(p)) {
+        return { kind: 'module', url: u.toString() };
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function navigateV3(raw) {
+    const info = moduleUrlInfo(raw);
+    if (!info) {
+      try { window.top.location.href = String(raw || ''); }
+      catch (err) { location.href = String(raw || ''); }
+      return true;
+    }
+
+    if (!IS_TOP) {
+      window.parent.postMessage({ type: CHILD_NAV_TYPE, url: info.url }, GITHUB_ORIGIN);
+      return true;
+    }
+
+    if (typeof window.myReaderShellNavigateV3 === 'function') {
+      window.myReaderShellNavigateV3(info.url);
+      return true;
+    }
+
+    location.href = info.url;
+    return true;
+  }
+
   window.addEventListener('message', event => {
-    // Apps Script HTML Service may add a Google wrapper iframe.
-    // The actual bridge message can therefore come from a nested child window,
-    // not bridgeFrame.contentWindow. Trust only Google-hosted origins and then
-    // pin the exact source window after the READY handshake.
-    if (!isTrustedBridgeOrigin(event.origin)) return;
     const data = event.data || {};
+
+    if (IS_TOP && event.origin === GITHUB_ORIGIN && data.type === CHILD_RPC_TYPE) {
+      const payload = data.payload || {};
+      if (!payload.id || payload.type !== 'MYREADER_RPC_V1') return;
+      childRoutes.set(String(payload.id), event.source);
+      postToBridge(payload);
+      return;
+    }
+
+    if (IS_TOP && event.origin === GITHUB_ORIGIN && data.type === CHILD_NAV_TYPE) {
+      if (typeof window.myReaderShellNavigateV3 === 'function') {
+        window.myReaderShellNavigateV3(String(data.url || ''));
+      }
+      return;
+    }
+
+    if (!IS_TOP && event.origin === GITHUB_ORIGIN && event.source === window.parent && data.type === CHILD_RESULT_TYPE) {
+      const payload = data.payload || {};
+      const item = pending.get(String(payload.id || ''));
+      if (!item) return;
+      pending.delete(String(payload.id));
+      clearTimeout(item.timer);
+
+      if (payload.ok) {
+        if (item.method === 'confirmLiteratureDevicePairingV62') {
+          const token = String(payload.value && payload.value.deviceToken || '');
+          if (token) saveToken(token);
+        }
+        if (item.method === 'revokeLiteratureCurrentDeviceV62') clearToken();
+        if (typeof item.success === 'function') item.success(payload.value, item.userObject);
+      } else {
+        const err = new Error(String(payload.error || 'MyReader backend error'));
+        if (typeof item.failure === 'function') item.failure(err, item.userObject);
+        else console.error(err);
+      }
+      return;
+    }
+
+    if (!IS_TOP || !isTrustedBridgeOrigin(event.origin)) return;
 
     if (data.type === 'MYREADER_BRIDGE_READY_V1') {
       bridgeOrigin = event.origin;
@@ -252,6 +337,15 @@
     if (!bridgeReady || !bridgeRpcWindow || event.source !== bridgeRpcWindow) return;
     if (data.type !== 'MYREADER_RPC_RESULT_V1' || !data.id) return;
 
+    const child = childRoutes.get(String(data.id));
+    if (child) {
+      childRoutes.delete(String(data.id));
+      try {
+        child.postMessage({ type: CHILD_RESULT_TYPE, payload: data }, GITHUB_ORIGIN);
+      } catch (err) {}
+      return;
+    }
+
     const item = pending.get(String(data.id));
     if (!item) return;
     pending.delete(String(data.id));
@@ -263,7 +357,6 @@
         if (token) saveToken(token);
       }
       if (item.method === 'revokeLiteratureCurrentDeviceV62') clearToken();
-
       if (typeof item.success === 'function') item.success(data.value, item.userObject);
     } else {
       const err = new Error(String(data.error || 'MyReader backend error'));
@@ -273,7 +366,7 @@
   });
 
   function mountBridge() {
-    if (bridgeFrame) return;
+    if (!IS_TOP || bridgeFrame) return;
     bridgeFrame = document.createElement('iframe');
     bridgeFrame.src = BRIDGE_URL;
     bridgeFrame.title = 'MyReader backend bridge';
@@ -284,18 +377,34 @@
     (document.body || document.documentElement).appendChild(bridgeFrame);
   }
 
+  function installEmbeddedNavigationCapture() {
+    if (IS_TOP) return;
+    document.addEventListener('click', event => {
+      const anchor = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+      if (!anchor) return;
+      const info = moduleUrlInfo(anchor.href || anchor.getAttribute('href'));
+      if (!info) return;
+      event.preventDefault();
+      event.stopPropagation();
+      navigateV3(info.url);
+    }, true);
+  }
+
   absorbDeviceFromUrl();
   installGoogleScriptRunShim();
+  installEmbeddedNavigationCapture();
 
   window.myReaderGetDeviceTokenV1 = getToken;
   window.myReaderSaveDeviceTokenV1 = saveToken;
   window.myReaderClearDeviceTokenV1 = clearToken;
   window.myReaderFingerprintV1 = currentFingerprint;
   window.myReaderQueryParamV1 = queryParam;
+  window.myReaderNavigateV3 = navigateV3;
+  window.myReaderIsEmbeddedV3 = !IS_TOP;
 
-  if (document.readyState === 'loading') {
+  if (IS_TOP && document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountBridge, { once: true });
-  } else {
+  } else if (IS_TOP) {
     mountBridge();
   }
 })();
