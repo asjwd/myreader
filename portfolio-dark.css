@@ -36,3 +36,36 @@ button,.btn,.miniBtn{border-radius:8px!important}
  .topbar{min-height:66px!important}
  .topbar .brandBtn::before,.topbar .brand::before{width:30px;height:30px;flex-basis:30px}
 }
+
+/* MyReader home — dark counterpart of the main portfolio. */
+.portfolioTopbarV5{height:76px;position:sticky;top:0;z-index:45;background:rgba(10,20,26,.97);border-bottom:1px solid #263a44;backdrop-filter:blur(14px)}
+.portfolioTopbarInnerV5{width:min(1100px,calc(100% - 48px));height:100%;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.portfolioBrandV5{display:flex;align-items:center;gap:11px;color:#f3fbfa;text-decoration:none;font:800 14px 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:.03em}
+.portfolioBrandV5 img{width:36px;height:36px;border-radius:11px;border:1px solid rgba(166,230,218,.22)}
+.portfolioNavV5{display:flex;align-items:center;gap:28px;font-size:12px;font-weight:700;color:#9db1b7}
+.portfolioNavV5 a{color:inherit;text-decoration:none}
+.portfolioNavV5 a:hover{color:#a6e6da}
+.portfolioNavV5 .portfolioBtnV5{padding:10px 15px;border-radius:8px;background:#173d45;color:#eaf7f4;border:1px solid #2d565d}
+body>.shell,body>main.shell{width:min(1100px,calc(100% - 48px));margin:auto}
+body>main.shell>.hero{margin:28px 0 0;padding:56px 48px 54px;border:1px solid #25404a;border-radius:18px;background:radial-gradient(circle at 84% 8%,#225e64 0%,transparent 35%),linear-gradient(115deg,#102a38,#123946 60%,#194f52);box-shadow:0 22px 55px rgba(0,0,0,.18)}
+body>main.shell>.hero .eyebrow{color:#a6e6da!important;font:800 10px 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase}
+body>main.shell>.hero .eyebrow::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#79dcca;margin-right:8px;vertical-align:1px}
+body>main.shell>.hero h1{font:800 clamp(34px,5vw,52px) 'Plus Jakarta Sans',system-ui,sans-serif!important;letter-spacing:-.055em;margin:16px 0 9px;color:#fff}
+body>main.shell>.hero .sub{color:#c4d8dc!important;font-size:14px}
+body>main.shell>.auth{margin-top:26px;padding:29px 30px;background:#111f27!important;border:1px solid #263a44!important;border-radius:14px!important}
+body>main.shell>.workspace{padding:32px 0 70px}
+body>main.shell .modules{gap:18px!important}
+body>main.shell .module{min-height:190px!important;padding:25px!important;background:#111f27!important;border:1px solid #263a44!important;border-radius:14px!important;box-shadow:none!important}
+body>main.shell .module:hover{transform:translateY(-3px)!important;border-color:#3a6668!important;box-shadow:0 22px 55px rgba(0,0,0,.22)!important}
+body>main.shell .module .icon{width:46px;height:46px;display:grid;place-items:center;margin:0 0 28px!important;border-radius:11px;background:#17343c;border:1px solid #2b5057;font-size:22px!important}
+body>main.shell .module h3{font:800 19px 'Plus Jakarta Sans',system-ui,sans-serif!important;letter-spacing:-.035em}
+body>main.shell .module p{color:#8fa5ad!important;line-height:1.7}
+body>main.shell .topline{padding:0 2px}
+body>main.shell .note{color:#718991!important}
+@media(max-width:700px){
+ .portfolioTopbarInnerV5{width:min(100% - 28px,1100px)}
+ .portfolioNavV5 a:not(.portfolioBtnV5){display:none}
+ body>.shell,body>main.shell{width:min(100% - 28px,1100px)}
+ body>main.shell>.hero{padding:38px 24px 36px;border-radius:15px}
+ body>main.shell .module{min-height:150px!important}
+}
