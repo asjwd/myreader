@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- V3_MYREADER_PERSISTENT_SHELL_NAV_20261114 -->
 <!-- V189_BOOK_FULLSCREEN_LAYER_MODAL_SAFE_20260927 -->
 <!-- V187_PORTRAIT_ALL_CONTENT_HEADER_OFFSET_20260926 -->
 <!-- V185_BOOK_NAV_MANUSCRIPT_20260916 -->
@@ -3367,7 +3368,8 @@ function unifiedReadingHrefV140_(type, id) {
 }
 function switchAnnotatedAppV85(app, id) {
     var type = String(app || '') === 'article' ? 'article' : 'book';
-    window.top.location.href = unifiedReadingHrefV140_(type, id || '');
+    if (typeof window.myReaderNavigateV3 === 'function') window.myReaderNavigateV3(unifiedReadingHrefV140_(type, id || ''));
+    else window.top.location.href = unifiedReadingHrefV140_(type, id || '');
 }
 function openUnifiedReadingAnchorV140_(el, event) {
     var type = String(el && el.getAttribute('data-reading-type') || 'article').toLowerCase();
@@ -5161,7 +5163,8 @@ function switchAnnotatedAppV85(app, id) {
     if (String(app || '') === 'article') {
         window.open(url.toString(), '_blank', 'noopener,noreferrer');
     } else {
-        window.top.location.href = url.toString();
+        if (typeof window.myReaderNavigateV3 === 'function') window.myReaderNavigateV3(url.toString());
+        else window.top.location.href = url.toString();
     }
 }
 function pauseBookReadingClockV94() {
