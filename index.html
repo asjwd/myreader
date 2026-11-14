@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- V1_MYREADER_GITHUB_HOME_20261114 -->
+<!-- V3_MYREADER_PERSISTENT_SHELL_20261114 -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -43,6 +43,12 @@
     .module p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
     .note{margin-top:14px;color:var(--muted);font-size:11px;line-height:1.6}
     @media(max-width:700px){body{padding:16px}.modules{grid-template-columns:1fr}.module{min-height:130px}.icon{margin-bottom:18px}}
+    .moduleStageV3{display:none;position:fixed;inset:0;z-index:50;background:var(--bg)}
+    .moduleStageV3.show{display:block}
+    .moduleFrameV3{display:block;width:100%;height:100%;border:0;background:var(--bg)}
+    .moduleHomeBtnV3{position:fixed;right:16px;bottom:16px;z-index:80;width:42px;height:42px;border:1px solid var(--line);border-radius:50%;background:rgba(32,36,40,.92);color:var(--ink);font-size:19px;cursor:pointer;box-shadow:var(--shadow)}
+    .moduleHomeBtnV3:hover{border-color:var(--accent)}
+    body.moduleModeV3{padding:0;overflow:hidden}
   </style>
   <script src="gas-shim.js"></script>
 </head>
@@ -85,17 +91,17 @@
         <button class="btn" type="button" onclick="revokeDevice()">Revoke this device</button>
       </div>
       <div class="modules">
-        <a class="card module" href="articles.html">
+        <a class="card module" href="articles.html" onclick="return openModuleV3(this.href)">
           <div class="icon">📄</div>
           <h3>Articles</h3>
           <p>Annotated bibliography, PDF reader, highlights, notes, reading status, and exports.</p>
         </a>
-        <a class="card module" href="books.html">
+        <a class="card module" href="books.html" onclick="return openModuleV3(this.href)">
           <div class="icon">📚</div>
           <h3>Books</h3>
           <p>Book library, translated pages, sections, highlights, reading progress, and reader PDF.</p>
         </a>
-        <a class="card module" href="manuscripts.html">
+        <a class="card module" href="manuscripts.html" onclick="return openModuleV3(this.href)">
           <div class="icon">📜</div>
           <h3>Manuscripts</h3>
           <p>Research manuscripts, references, submissions, resources, tasks, and project notes.</p>
@@ -105,9 +111,15 @@
     </section>
   </main>
 
+  <section class="moduleStageV3" id="moduleStageV3" aria-hidden="true">
+    <iframe class="moduleFrameV3" id="moduleFrameV3" title="MyReader module"></iframe>
+    <button class="moduleHomeBtnV3" type="button" onclick="showMyReaderHomeV3()" title="MyReader home" aria-label="MyReader home">⌂</button>
+  </section>
+
 <script>
 const ACCESS_SENTINEL='__MYREADER_ACCESS__';
 let pairingRequestId='';
+let warmBootstrapsStartedV3=false;
 
 function detectName(){
   const ua=String(navigator.userAgent||''),p=String(navigator.platform||''),t=Number(navigator.maxTouchPoints||0);
@@ -127,7 +139,48 @@ function showWorkspace(name){
   document.getElementById('authCard').style.display='none';
   document.getElementById('workspace').classList.add('show');
   document.getElementById('deviceLabel').textContent=String(name||detectName());
+  setTimeout(warmBootstrapsV3,350);
 }
+
+function warmBootstrapsV3(){
+  if(warmBootstrapsStartedV3||!myReaderGetDeviceTokenV1())return;
+  warmBootstrapsStartedV3=true;
+  google.script.run
+    .withSuccessHandler(()=>{})
+    .withFailureHandler(()=>{warmBootstrapsStartedV3=false;})
+    .myReaderWarmBootstrapsV3(ACCESS_SENTINEL);
+}
+
+function openModuleV3(rawUrl){
+  if(!myReaderGetDeviceTokenV1())return true;
+  let url;
+  try{url=new URL(String(rawUrl||''),location.href)}catch(err){return true}
+  const stage=document.getElementById('moduleStageV3');
+  const frame=document.getElementById('moduleFrameV3');
+  if(!stage||!frame)return true;
+  frame.src=url.pathname+url.search+url.hash;
+  stage.classList.add('show');
+  stage.setAttribute('aria-hidden','false');
+  document.body.classList.add('moduleModeV3');
+  return false;
+}
+
+function showMyReaderHomeV3(){
+  const stage=document.getElementById('moduleStageV3');
+  const frame=document.getElementById('moduleFrameV3');
+  if(frame)frame.src='about:blank';
+  if(stage){stage.classList.remove('show');stage.setAttribute('aria-hidden','true');}
+  document.body.classList.remove('moduleModeV3');
+  verifySaved();
+}
+
+window.myReaderShellNavigateV3=function(rawUrl){
+  let url;
+  try{url=new URL(String(rawUrl||''),location.href)}catch(err){return}
+  const p=url.pathname.replace(/\/+$/,'');
+  if(p==='/myreader'||p==='/myreader/index.html'){showMyReaderHomeV3();return;}
+  openModuleV3(url.toString());
+};
 function showPairing(message){
   document.getElementById('workspace').classList.remove('show');
   document.getElementById('authCard').style.display='block';
