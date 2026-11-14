@@ -1,0 +1,211 @@
+<!doctype html>
+<!-- V1_MYREADER_GITHUB_HOME_20261114 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>賈旺's MyReader</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101214;--paper:#181b1e;--paper2:#202428;--ink:#eef0ed;--muted:#9da39f;--line:#30363a;--accent:#8fb6a0;--accent2:#b6d7c2;--danger:#e6a0a0;--shadow:0 18px 48px rgba(0,0,0,.32)}
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink)}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
+    button,input{font:inherit}
+    .shell{width:min(920px,100%);margin:0 auto}
+    .hero{padding:18px 2px 20px}
+    .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+    h1{font:700 clamp(30px,5vw,48px) Georgia,serif;margin:7px 0 6px}
+    .sub{color:var(--muted);font-size:13px;line-height:1.6}
+    .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+    .auth{padding:22px;margin-top:10px}
+    .auth h2{font:700 23px Georgia,serif;margin:0 0 6px}
+    .label{display:block;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin:14px 0 6px}
+    input{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--paper2);color:var(--ink);padding:11px 12px;outline:none}
+    input:focus{border-color:var(--accent)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;background:var(--paper2);color:var(--ink);padding:10px 13px;text-decoration:none;cursor:pointer}
+    .btn:hover,.btn:focus-visible{border-color:var(--accent);outline:none}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#101713;font-weight:750}
+    .btn:disabled{opacity:.55;cursor:default}
+    .status{margin-top:13px;color:var(--muted);font-size:12px;line-height:1.55}
+    .status.error{color:var(--danger)}
+    .workspace{display:none}
+    .workspace.show{display:block}
+    .topline{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:12px 0 16px}
+    .device{font-size:12px;color:var(--muted)}
+    .device strong{color:var(--ink)}
+    .modules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .module{display:block;padding:20px;min-height:165px;text-decoration:none;color:var(--ink);transition:transform .15s ease,border-color .15s ease;background:var(--paper)}
+    .module:hover{transform:translateY(-2px);border-color:var(--accent)}
+    .icon{font-size:32px;margin-bottom:26px}
+    .module h3{font:700 22px Georgia,serif;margin:0 0 7px}
+    .module p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
+    .note{margin-top:14px;color:var(--muted);font-size:11px;line-height:1.6}
+    @media(max-width:700px){body{padding:16px}.modules{grid-template-columns:1fr}.module{min-height:130px}.icon{margin-bottom:18px}}
+  </style>
+  <script src="gas-shim.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="eyebrow">Private Research Library</div>
+      <h1>賈旺's MyReader</h1>
+      <div class="sub">Books · Articles · Manuscripts</div>
+    </header>
+
+    <section class="card auth" id="authCard">
+      <h2>Trusted device</h2>
+      <div class="sub">Authorize this browser once. The device token is remembered locally on this browser.</div>
+
+      <div id="requestStep">
+        <label class="label" for="deviceName">Device name</label>
+        <input id="deviceName" maxlength="80">
+        <label class="label" for="devicePassword">Authorization password</label>
+        <input id="devicePassword" type="password" autocomplete="current-password">
+        <div class="actions">
+          <button class="btn primary" id="sendBtn" type="button" onclick="requestCode()">Send authorization code</button>
+        </div>
+      </div>
+
+      <div id="otpStep" style="display:none">
+        <label class="label" for="otp">Authorization code</label>
+        <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="5" placeholder="5-digit code">
+        <div class="actions">
+          <button class="btn primary" id="confirmBtn" type="button" onclick="confirmCode()">Authorize device</button>
+          <button class="btn" type="button" onclick="restartPairing()">Back</button>
+        </div>
+      </div>
+      <div class="status" id="status">Checking saved authorization…</div>
+    </section>
+
+    <section class="workspace" id="workspace">
+      <div class="topline">
+        <div class="device">Accessing from <strong id="deviceLabel">Authorized device</strong></div>
+        <button class="btn" type="button" onclick="revokeDevice()">Revoke this device</button>
+      </div>
+      <div class="modules">
+        <a class="card module" href="articles.html">
+          <div class="icon">📄</div>
+          <h3>Articles</h3>
+          <p>Annotated bibliography, PDF reader, highlights, notes, reading status, and exports.</p>
+        </a>
+        <a class="card module" href="books.html">
+          <div class="icon">📚</div>
+          <h3>Books</h3>
+          <p>Book library, translated pages, sections, highlights, reading progress, and reader PDF.</p>
+        </a>
+        <a class="card module" href="manuscripts.html">
+          <div class="icon">📜</div>
+          <h3>Manuscripts</h3>
+          <p>Research manuscripts, references, submissions, resources, tasks, and project notes.</p>
+        </a>
+      </div>
+      <div class="note">Spreadsheet and Drive remain private. GitHub contains only the frontend code.</div>
+    </section>
+  </main>
+
+<script>
+const ACCESS_SENTINEL='__MYREADER_ACCESS__';
+let pairingRequestId='';
+
+function detectName(){
+  const ua=String(navigator.userAgent||''),p=String(navigator.platform||''),t=Number(navigator.maxTouchPoints||0);
+  if(/iPhone/i.test(ua))return'iPhone';
+  if(/iPad/i.test(ua)||(p==='MacIntel'&&t>1))return'iPad';
+  if(/Android/i.test(ua))return'Android';
+  if(/Chrome|CriOS/i.test(ua))return'Chrome Laptop';
+  if(/Safari/i.test(ua))return'Safari';
+  return'Personal device';
+}
+function setStatus(text,error=false){
+  const el=document.getElementById('status');
+  el.textContent=String(text||'');
+  el.classList.toggle('error',!!error);
+}
+function showWorkspace(name){
+  document.getElementById('authCard').style.display='none';
+  document.getElementById('workspace').classList.add('show');
+  document.getElementById('deviceLabel').textContent=String(name||detectName());
+}
+function showPairing(message){
+  document.getElementById('workspace').classList.remove('show');
+  document.getElementById('authCard').style.display='block';
+  document.getElementById('requestStep').style.display='block';
+  document.getElementById('otpStep').style.display='none';
+  document.getElementById('deviceName').value=detectName();
+  setStatus(message||'Authorize this browser to continue.');
+}
+function verifySaved(){
+  const token=myReaderGetDeviceTokenV1();
+  if(!token){showPairing('Authorize this browser to continue.');return}
+  setStatus('Checking saved authorization…');
+  google.script.run
+    .withSuccessHandler(res=>{
+      if(res&&res.ok){showWorkspace(res.deviceName||detectName());return}
+      showPairing('Saved authorization is no longer active.');
+    })
+    .withFailureHandler(err=>showPairing(err&&err.message?err.message:String(err)))
+    .verifyLiteraturePrivateDeviceV62(token,myReaderFingerprintV1(),ACCESS_SENTINEL);
+}
+function requestCode(){
+  const btn=document.getElementById('sendBtn');
+  const name=String(document.getElementById('deviceName').value||'').trim()||detectName();
+  const password=String(document.getElementById('devicePassword').value||'');
+  if(!password){setStatus('Enter the device authorization password.',true);return}
+  btn.disabled=true;btn.textContent='Sending…';
+  google.script.run
+    .withSuccessHandler(res=>{
+      btn.disabled=false;btn.textContent='Send authorization code';
+      pairingRequestId=String(res&&res.requestId||'');
+      document.getElementById('devicePassword').value='';
+      document.getElementById('requestStep').style.display='none';
+      document.getElementById('otpStep').style.display='block';
+      document.getElementById('otp').focus();
+      setStatus(`Code sent to ${String(res&&res.sentTo||'owner email')}.`);
+    })
+    .withFailureHandler(err=>{
+      btn.disabled=false;btn.textContent='Send authorization code';
+      setStatus(err&&err.message?err.message:String(err),true);
+    })
+    .requestLiteratureDevicePairingV62(name,password,myReaderFingerprintV1(),ACCESS_SENTINEL);
+}
+function confirmCode(){
+  const btn=document.getElementById('confirmBtn');
+  const otp=String(document.getElementById('otp').value||'').replace(/\D/g,'');
+  if(!pairingRequestId){setStatus('Request a new authorization code.',true);return}
+  if(!/^\d{5}$/.test(otp)){setStatus('Enter the 5-digit authorization code.',true);return}
+  btn.disabled=true;btn.textContent='Authorizing…';
+  google.script.run
+    .withSuccessHandler(res=>{
+      btn.disabled=false;btn.textContent='Authorize device';
+      if(!res||!res.deviceToken){setStatus('Device authorization failed.',true);return}
+      myReaderSaveDeviceTokenV1(res.deviceToken);
+      showWorkspace(res.deviceName||detectName());
+    })
+    .withFailureHandler(err=>{
+      btn.disabled=false;btn.textContent='Authorize device';
+      setStatus(err&&err.message?err.message:String(err),true);
+    })
+    .confirmLiteratureDevicePairingV62(pairingRequestId,otp,ACCESS_SENTINEL);
+}
+function restartPairing(){
+  pairingRequestId='';
+  document.getElementById('otp').value='';
+  showPairing('Request a new authorization code.');
+}
+function revokeDevice(){
+  const token=myReaderGetDeviceTokenV1();
+  if(!token){showPairing();return}
+  google.script.run
+    .withSuccessHandler(()=>{
+      myReaderClearDeviceTokenV1();
+      showPairing('This device has been revoked.');
+    })
+    .withFailureHandler(err=>setStatus(err&&err.message?err.message:String(err),true))
+    .revokeLiteratureCurrentDeviceV62(token,myReaderFingerprintV1(),ACCESS_SENTINEL);
+}
+document.addEventListener('DOMContentLoaded',verifySaved);
+</script>
+</body>
+</html>
