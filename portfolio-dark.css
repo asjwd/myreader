@@ -1,4 +1,4 @@
-/* V5_PORTFOLIO_DARK_THEME_20261114 */
+/* V6_UNIFIED_READER_WORK_THEME_20261115 */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 :root{
   --bg:#0b1419!important;
@@ -69,3 +69,20 @@ body>main.shell .note{color:#718991!important}
  body>main.shell>.hero{padding:38px 24px 36px;border-radius:15px}
  body>main.shell .module{min-height:150px!important}
 }
+
+/* V6 — unified Reader/Work visual language */
+body,button,input,select,textarea{font-family:'DM Sans',system-ui,sans-serif!important}
+body *{font-family:'DM Sans',system-ui,sans-serif!important}
+h1,h2,h3,h4,h5,h6,
+.brand,.brandBtn,.portfolioBrandV5,
+[class*="Title"],[class*="title"],
+[class*="Heading"],[class*="heading"],
+.accTitle,.rowTitle,.courseTitle,.assignmentTitle,.manageTitle,
+.deviceGateBrand,.modalHead h3,.sectionHead h3{
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif!important
+}
+code,pre,kbd,samp,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace!important}
+.portfolioTopbarInnerV5{justify-content:flex-start!important}
+.portfolioBrandV5{font-size:15px!important;letter-spacing:-.01em!important}
+.portfolioNavV5{display:none!important}
+.moduleHomeBtnV3{display:none!important}
